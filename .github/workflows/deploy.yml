@@ -96,7 +96,7 @@ jobs:
       matrix:
         app: [api, bot, admin, client]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
@@ -135,7 +135,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate .env from GitHub secrets
         env:
