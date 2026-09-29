@@ -4,17 +4,19 @@
 
 ## App(s) affected
 
-- [ ] api
-- [ ] bot
-- [ ] admin
-- [ ] database
+- [ ] services/gateway
+- [ ] services/auth
+- [ ] services/users
+- [ ] services/bot
+- [ ] services/pkg
+- [ ] apps/admin
+- [ ] apps/client
 
 ## Checklist
 
-- [ ] `pnpm lint` passes
-- [ ] `pnpm typecheck` passes
-- [ ] `pnpm build` passes
-- [ ] Added/updated migrations if the schema changed
+- [ ] Go: `gofmt`, `go vet`, `go test` pass (`make lint test`)
+- [ ] Frontend: `pnpm lint`, `pnpm typecheck`, `pnpm build` pass
+- [ ] Added a goose migration (`services/<name>/migrations/`) if a schema changed
 - [ ] Updated `.env.example` if new env vars were introduced
 
 ## Test plan

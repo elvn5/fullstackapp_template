@@ -18,7 +18,6 @@ async function toggle(event: MouseEvent): Promise<void> {
   const prefersReducedMotion =
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // @ts-expect-error — startViewTransition ещё не во всех типах lib.dom
   if (typeof document === 'undefined' || !document.startViewTransition || prefersReducedMotion) {
     await applyTheme(next);
     return;
@@ -31,7 +30,6 @@ async function toggle(event: MouseEvent): Promise<void> {
     Math.max(y, window.innerHeight - y),
   );
 
-  // @ts-expect-error — startViewTransition ещё не во всех типах lib.dom
   const transition = document.startViewTransition(() => applyTheme(next));
 
   transition.ready.then(() => {

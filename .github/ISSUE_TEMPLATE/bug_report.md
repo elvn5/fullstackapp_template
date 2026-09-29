@@ -11,10 +11,13 @@ A clear description of what's wrong.
 
 ## App affected
 
-- [ ] api
-- [ ] bot
-- [ ] admin
-- [ ] database
+- [ ] services/gateway
+- [ ] services/auth
+- [ ] services/users
+- [ ] services/bot
+- [ ] services/pkg
+- [ ] apps/admin
+- [ ] apps/client
 
 ## Steps to reproduce
 
@@ -29,6 +32,7 @@ A clear description of what's wrong.
 ## Environment
 
 - OS:
+- Go version:
 - Node version:
 - pnpm version:
 

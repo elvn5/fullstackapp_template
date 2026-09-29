@@ -48,7 +48,7 @@ const onSubmit = handleSubmit(async (values) => {
     >
       <h1 class="mb-1 flex items-center gap-2 text-lg font-semibold">
         <span class="inline-block h-5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
-        <span>As<span class="text-brand-600 dark:text-brand-400">Di</span> Cargo</span>
+        <span>App <span class="text-brand-600 dark:text-brand-400">Admin</span></span>
       </h1>
       <p class="mb-4 text-sm text-steel-500 dark:text-steel-400">Вход в админку</p>
 

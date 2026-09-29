@@ -25,13 +25,13 @@ export default defineNuxtConfig({
     },
   },
   runtimeConfig: {
-    // Серверный (SSR) URL API — внутри Docker это http://api:3001.
+    // Серверный (SSR) URL API — внутри Docker это http://gateway:3001.
     apiInternalUrl: process.env.NUXT_API_INTERNAL_URL ?? 'http://localhost:3001',
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001',
       // Версия задеплоенного образа для футера (задаётся в рантайме через NUXT_PUBLIC_APP_VERSION).
       appVersion: process.env.NUXT_PUBLIC_APP_VERSION ?? '',
-      botUrl: process.env.NUXT_PUBLIC_BOT_URL ?? 'https://t.me/acme_bot',
+      botUrl: process.env.NUXT_PUBLIC_BOT_URL ?? 'https://t.me/your_bot',
       // Канонический адрес сайта (для SEO-тегов и sitemap).
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL ?? 'https://example.com',
     },

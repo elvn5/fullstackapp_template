@@ -9,14 +9,13 @@ const config = useRuntimeConfig();
 const version = String(config.public.appVersion ?? '');
 const versionLabel = /^\d/.test(version) ? `v${version}` : version;
 
+// Пункты бокового меню. Добавляйте сюда новые разделы админки.
 const links = [
-  { label: 'Запрещенные товары', to: '/banned-items' },
-  { label: 'Адреса', to: '/addresses' },
-  { label: 'Поддержка', to: '/support' },
-  { label: 'Посылки', to: '/parcels' },
-  { label: 'Пользователи', to: '/users' },
-  { label: 'Блог', to: '/blog' },
+  { label: 'Главная', to: '/', icon: 'i-lucide-house' },
+  { label: 'Пользователи', to: '/users', icon: 'i-lucide-users' },
 ];
+const activeClass =
+  '!bg-brand-50 !text-brand-700 font-medium dark:!bg-brand-950 dark:!text-brand-300';
 
 async function handleLogout(): Promise<void> {
   await auth.logout();
@@ -35,7 +34,7 @@ async function handleLogout(): Promise<void> {
       <div class="mb-6 flex items-center justify-between gap-2">
         <h1 class="flex items-center gap-2 text-lg font-semibold">
           <span class="inline-block h-5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
-          <span>As<span class="text-brand-600 dark:text-brand-400">Di</span> Cargo</span>
+          <span>App <span class="text-brand-600 dark:text-brand-400">Admin</span></span>
         </h1>
         <ThemeToggle />
       </div>
@@ -45,9 +44,11 @@ async function handleLogout(): Promise<void> {
           v-for="link in links"
           :key="link.to"
           :to="link.to"
-          class="rounded-md px-3 py-2 text-sm text-steel-600 transition-colors hover:bg-steel-100 hover:text-steel-900 dark:text-steel-300 dark:hover:bg-steel-800 dark:hover:text-white"
-          active-class="!bg-brand-50 !text-brand-700 font-medium dark:!bg-brand-950 dark:!text-brand-300"
+          class="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-steel-600 transition-colors hover:bg-steel-100 hover:text-steel-900 dark:text-steel-300 dark:hover:bg-steel-800 dark:hover:text-white"
+          :active-class="link.to === '/' ? '' : activeClass"
+          :exact-active-class="activeClass"
         >
+          <UIcon :name="link.icon" class="size-4" />
           {{ link.label }}
         </NuxtLink>
       </nav>

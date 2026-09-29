@@ -10,3 +10,8 @@ dist/
 .DS_Store
 .claude/settings.local.json
 _to_delete/
+
+# Go
+services/tmp/
+*.test
+coverage.out

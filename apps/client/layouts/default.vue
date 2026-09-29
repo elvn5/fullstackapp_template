@@ -2,13 +2,8 @@
 const { t } = useI18n();
 const localePath = useLocalePath();
 
-// Якорные пункты ведут на главную с якорем, чтобы работать и со страниц блога.
-const links = computed(() => [
-  { label: t('nav.services'), to: `${localePath('/')}#services` },
-  { label: t('nav.how'), to: `${localePath('/')}#how` },
-  { label: t('nav.contacts'), to: `${localePath('/')}#contacts` },
-  { label: t('nav.blog'), to: localePath('/blog') },
-]);
+// Пункты меню. Якорные ведут на главную с якорем, чтобы работать с любой страницы.
+const links = computed(() => [{ label: t('nav.features'), to: `${localePath('/')}#features` }]);
 
 const config = useRuntimeConfig();
 const botUrl = config.public.botUrl as string;
@@ -36,7 +31,7 @@ watch(
       <div class="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4">
         <NuxtLink :to="localePath('/')" class="flex items-center gap-2 text-lg font-semibold">
           <span class="inline-block h-6 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
-          <span>As<span class="text-brand-600 dark:text-brand-400">Di</span> Cargo</span>
+          <span>My<span class="text-brand-600 dark:text-brand-400">App</span></span>
         </NuxtLink>
 
         <nav class="hidden items-center gap-1 md:flex">
@@ -119,7 +114,7 @@ watch(
       <div
         class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-sm text-steel-500 dark:text-steel-400 sm:flex-row"
       >
-        <span>© {{ new Date().getFullYear() }} Acme</span>
+        <span>© {{ new Date().getFullYear() }} MyApp</span>
         <span>{{ t('footer.tagline') }}</span>
       </div>
       <div

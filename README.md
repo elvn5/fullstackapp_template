@@ -1,28 +1,75 @@
-# Parcel Bot Monorepo
+# Fullstack App Template
 
-A pnpm/TypeScript monorepo template for a Telegram bot + admin panel + REST API, built on
-NestJS, Nuxt 3, and TypeORM/PostgreSQL. Use this repository as a **GitHub template**
-("Use this template" button) to bootstrap similar bot + admin panel projects.
+**Репозиторий-шаблон — чистый лист для новых проектов.** В нём нет никакой
+предметной логики: только инфраструктура, на которой можно сразу строить продукт —
+Go-микросервисы, админка и публичный сайт на Nuxt, Telegram-бот, Docker и CI/CD.
 
-## Stack
+Создайте новый репозиторий кнопкой **Use this template** на GitHub и начинайте
+писать свою бизнес-логику.
 
-| App | Framework | Purpose |
+## Что внутри
+
+| Каталог | Стек | Назначение |
 | --- | --- | --- |
-| [`apps/api`](apps/api) | NestJS | REST API, JWT auth, TypeORM data access |
-| [`apps/bot`](apps/bot) | NestJS + Telegraf | Telegram bot |
-| [`apps/admin`](apps/admin) | Nuxt 3 + @nuxt/ui | Admin panel (Pinia, VeeValidate, Zod) |
-| [`packages/database`](packages/database) | TypeORM | Shared entities, migrations, data source |
+| [`services/gateway`](services/gateway) | Go + Gin | API Gateway — единственная публичная точка входа: CORS, проверка сессии, проксирование в сервисы |
+| [`services/auth`](services/auth) | Go + Gin | Вход в админку (пароль → JWT в httpOnly-куке), `/auth/me`, logout |
+| [`services/users`](services/users) | Go + Gin + pgx | Пользователи, своя БД `users`, миграции goose |
+| [`services/bot`](services/bot) | Go + go-telegram/bot | Telegram-бот: `/start` регистрирует пользователя через `users` |
+| [`services/pkg`](services/pkg) | Go | Общий код: конфиг, логгер (slog), Gin-сервер, JWT, Postgres |
+| [`apps/admin`](apps/admin) | Nuxt 4 + @nuxt/ui | Админ-панель: логин, главная, список пользователей |
+| [`apps/client`](apps/client) | Nuxt 4 + i18n | Публичный сайт-заглушка (ru / ky / en), SEO, sitemap |
+| [`packages/theme`](packages/theme) | Tailwind v4 | Общая цветовая схема фронтендов |
 
-Formatting/linting via [Biome](https://biomejs.dev), logging via [Pino](https://getpino.io),
-validation via [Zod](https://zod.dev) (backend) and [VeeValidate](https://vee-validate.logaretm.com) (frontend).
+`auth`, `users` и `bot` — это стартовые примеры: переименуйте, расширьте или
+удалите их под свой домен.
 
-## Requirements
+## Архитектура
 
-- Node.js >= 24
-- pnpm 9 (`corepack enable`)
-- Docker + Docker Compose (for PostgreSQL and/or full-stack runs)
+```
+                 ┌──────────────┐   ┌──────────────┐
+   браузер ────▶ │ apps/client  │   │  apps/admin  │
+                 └──────┬───────┘   └──────┬───────┘
+                        │  HTTP (cookie)   │
+                        ▼                  ▼
+                 ┌─────────────────────────────────┐
+                 │   services/gateway  (Gin, :3001) │  CORS, проверка JWT
+                 └───────┬───────────────┬─────────┘
+               /auth/*   │               │  /users/* (только admin)
+                         ▼               ▼
+              ┌────────────────┐  ┌────────────────┐     ┌──────────────┐
+              │ services/auth  │  │ services/users │ ◀── │ services/bot │ ◀── Telegram
+              │     :8081      │  │     :8082      │     └──────────────┘
+              └────────────────┘  └───────┬────────┘   POST /internal/users/telegram
+                                          ▼
+                                  ┌────────────────┐
+                                  │  PostgreSQL    │  база на сервис (users, …)
+                                  └────────────────┘
+```
 
-## Getting started
+- **Микросервисы.** Каждый сервис — отдельный Go-модуль и отдельный Docker-образ,
+  владеет своими данными (database-per-service на общем Postgres-сервере) и общается
+  с другими по HTTP. Наружу публикуется только gateway.
+- **Clean Architecture внутри сервиса:**
+  ```
+  services/<name>/
+    cmd/<name>/main.go          сборка зависимостей и запуск (frameworks & drivers)
+    internal/domain/            сущности и доменные ошибки — без зависимостей
+    internal/usecase/           бизнес-логика; зависит только от интерфейсов
+    internal/adapter/httpapi/   HTTP-хендлеры (Gin)
+    internal/adapter/repository/ реализация хранилища (pgx)
+    internal/config/            настройки из env
+    migrations/                 SQL-миграции (goose), вшиваются в бинарник
+  ```
+- **Внутренние маршруты** (`/internal/*`) gateway не проксирует — они доступны
+  только внутри docker-сети (например, для бота).
+
+## Требования
+
+- Go 1.27+
+- Node.js 24+ и pnpm 9 (`corepack enable`)
+- Docker + Docker Compose
+
+## Быстрый старт
 
 ```bash
 corepack enable
@@ -30,63 +77,106 @@ pnpm install
 cp .env.example .env
 ```
 
-Fill in `.env` — at minimum set `POSTGRES_PASSWORD`, `JWT_SECRET`, `ADMIN_PASSWORD`, and
-`BOT_TOKEN` (from [@BotFather](https://t.me/BotFather)). See [.env.example](.env.example)
-for the full list.
+Заполните в `.env` как минимум `JWT_SECRET` (≥ 16 символов), `ADMIN_PASSWORD`,
+`POSTGRES_PASSWORD` и `BOT_TOKEN` (от [@BotFather](https://t.me/BotFather)).
 
-### Run with Docker (recommended)
+### Всё в Docker
 
 ```bash
 docker compose up -d --build
 ```
 
-This starts PostgreSQL, the API (`:3001`), the bot, and the admin panel (`:3000`).
+- сайт — http://localhost:3002
+- админка — http://localhost:3000 (пароль — `ADMIN_PASSWORD`)
+- API (gateway) — http://localhost:3001, health-check — `/healthz`
 
-### Run locally
-
-Start PostgreSQL (e.g. `docker compose up -d postgres`), then in separate terminals:
+Режим разработки с hot-reload (air для Go, Nuxt dev-server для фронтендов):
 
 ```bash
-pnpm dev:api     # http://localhost:3001
-pnpm dev:bot
-pnpm dev:admin   # http://localhost:3000
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-Each `dev:*` script builds `@app/database` first so entity/migration changes are picked up.
+### Локально без Docker
 
-## Scripts
+Поднимите только Postgres (`docker compose up -d postgres`), затем в отдельных
+терминалах:
 
-| Command | Description |
+```bash
+make dev-users      # :8082, применит миграции
+make dev-auth       # :8081
+make dev-gateway    # :3001
+make dev-bot
+pnpm dev:admin      # :3000
+pnpm dev:client     # :3002
+```
+
+Без `make`: `cd services && go run ./users/cmd/users` и т.д.
+
+## Команды
+
+| Команда | Описание |
 | --- | --- |
-| `pnpm dev:api` / `dev:bot` / `dev:admin` | Run an app in watch mode |
-| `pnpm build` | Build all workspace packages |
-| `pnpm lint` / `pnpm lint:fix` | Biome check / check --write |
-| `pnpm typecheck` | Type-check all workspace packages |
-| `pnpm migration:generate` | Generate a TypeORM migration (`packages/database`) |
-| `pnpm migration:run` | Run pending migrations |
+| `make help` | Список Go-команд |
+| `make dev-<service>` | Запустить Go-сервис локально |
+| `make test` / `make vet` / `make fmt` | Тесты, go vet, gofmt |
+| `make lint` | gofmt + go vet + Biome |
+| `make build` | Собрать все Go-сервисы в `services/tmp/` |
+| `make tidy` | `go mod tidy` во всех модулях |
+| `pnpm dev:admin` / `pnpm dev:client` | Nuxt в режиме разработки |
+| `pnpm lint` / `pnpm lint:fix` | Biome |
+| `pnpm typecheck` / `pnpm build` | Проверка типов / сборка фронтендов |
 
-## Project structure
+## Структура
 
 ```
+services/            Go-микросервисы (go.work объединяет модули для IDE и локальной сборки)
+  pkg/               общий модуль
+  gateway/ auth/ users/ bot/
+  Dockerfile         общий prod-Dockerfile (--build-arg SERVICE=<name>)
+  Dockerfile.dev     образ с air для hot-reload
 apps/
-  api/      NestJS REST API
-  bot/      NestJS Telegram bot (Telegraf)
-  admin/    Nuxt 3 admin panel
+  admin/             Nuxt-админка
+  client/            Nuxt-сайт
 packages/
-  database/ TypeORM entities, migrations, data source
+  theme/             общая тема Tailwind / Nuxt UI
+deploy/
+  postgres/          init-скрипт: база на каждый сервис
+  nginx/             пример reverse proxy
+.github/workflows/   ci.yml (проверки), deploy.yml (сборка образов и деплой)
 ```
 
-Backend follows Clean Architecture (entities → use cases → controllers → frameworks/drivers);
-the admin frontend follows Feature-Sliced Design. See [CLAUDE.md](CLAUDE.md) for full
-conventions.
+## Как начать новый проект из шаблона
 
-## Using this as a template
+1. **Use this template** → новый репозиторий.
+2. Замените модульный путь Go `github.com/your-org/app` на свой:
+   ```bash
+   grep -rl 'github.com/your-org/app' services | xargs sed -i '' 's#github.com/your-org/app#github.com/<you>/<project>#g'
+   ```
+   (на Linux — `sed -i` без `''`).
+3. Переименуйте проект в [package.json](package.json), `MyApp` / `App Admin` во
+   фронтендах и тексты в `apps/client/i18n/locales/*.json`; цвета — в
+   [packages/theme/theme.css](packages/theme/theme.css).
+4. Скопируйте `.env.example` в `.env` и заполните секреты — никогда не коммитьте `.env`.
+5. Добавляйте свою предметную область (см. ниже).
 
-1. Click **Use this template** on GitHub to create a new repository.
-2. Rename `parcel-bot-monorepo` in [package.json](package.json) and update this README.
-3. Copy `.env.example` to `.env` and fill in real secrets — never commit `.env`.
-4. Adjust `apps/*` to fit your domain; `packages/database` holds the shared schema.
+### Добавить новый микросервис
 
-## License
+1. Скопируйте `services/users` в `services/<name>` и поменяйте `module` в `go.mod`.
+2. Добавьте модуль в `services/go.work` и `SERVICES` в [Makefile](Makefile).
+3. Если нужна БД — добавьте имя в `POSTGRES_MULTIPLE_DATABASES`.
+4. Добавьте сервис в `docker-compose*.yml`, в матрицу `build` в
+   `.github/workflows/deploy.yml` и в `.github/dependabot.yml`.
+5. Пропишите публичные маршруты в `services/gateway/internal/router/router.go`.
+
+## Деплой
+
+GitHub Actions собирает образы в GHCR и выкатывает их по SSH: push в `main` →
+staging, тег `vX.Y.Z` → production. Подробности — в [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Соглашения
+
+См. [CLAUDE.md](CLAUDE.md) и [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Лицензия
 
 [MIT](LICENSE)
