@@ -8,24 +8,24 @@ pnpm install
 cp .env.example .env
 ```
 
-Fill in `.env` before running any app — see [README.md](README.md) for details.
+Go 1.27+ is required for `services/`. Fill in `.env` before running anything — see
+[README.md](README.md) for details.
 
 ## Workflow
 
 1. Create a branch off `main`.
-2. Make your changes, following the conventions in [CLAUDE.md](CLAUDE.md) (absolute
-   imports, Clean Architecture on the backend, Feature-Sliced Design on the admin
-   frontend, Zod/VeeValidate for validation, Pino for logging).
+2. Make your changes, following the conventions in [CLAUDE.md](CLAUDE.md) (Clean
+   Architecture per Go service, database-per-service, Feature-Sliced Design on the
+   frontends, slog for logging, VeeValidate/Zod on the frontend).
 3. Before opening a PR, run:
    ```bash
-   pnpm lint
+   make lint test build   # Go: gofmt, go vet, tests, build + Biome
    pnpm typecheck
    pnpm build
    ```
-4. If you changed the database schema, generate a migration:
-   ```bash
-   pnpm migration:generate
-   ```
+4. If you changed a database schema, add a goose migration to
+   `services/<name>/migrations/` (e.g. `00002_add_something.sql`). It is applied on
+   service start.
 5. Open a PR against `main` using the PR template checklist.
 
 ## Commit messages

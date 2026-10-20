@@ -1,7 +1,7 @@
 /**
- * Единая цветовая схема Acme (см. пакет @app/theme).
- *  primary -> brand  (терракотовый красный логотипа)
- *  neutral -> steel  (графитовый серый логотипа)
+ * Единая цветовая схема проекта (см. пакет @app/theme).
+ *  primary -> brand  (акцентный цвет)
+ *  neutral -> steel  (нейтральный серый)
  */
 export default defineAppConfig({
   ui: {

@@ -1,9 +1,12 @@
 # Деплой
 
 CI/CD построен на GitHub Actions + Docker. Образы всех приложений
-(`api`, `bot`, `admin`, `client`) собираются и публикуются в GitHub
-Container Registry (GHCR), затем разворачиваются на сервере по SSH через
-`docker compose`.
+(Go-микросервисы `gateway`, `auth`, `users`, `bot` и фронтенды `admin`, `client`)
+собираются и публикуются в GitHub Container Registry (GHCR), затем
+разворачиваются на сервере по SSH через `docker compose`.
+
+Проверки (gofmt, go vet, go test, Biome, typecheck, build) запускаются
+отдельным workflow `.github/workflows/ci.yml` на каждый PR.
 
 ## Стратегия окружений
 
@@ -31,16 +34,16 @@ Settings → Environments → создать **`staging`** и **`production`**.
 | `DEPLOY_SSH_USER`  | SSH-пользователь                                       |
 | `DEPLOY_SSH_KEY`   | приватный SSH-ключ (весь PEM-файл)                     |
 | `DEPLOY_SSH_PORT`  | порт SSH (необязательно, по умолчанию `22`)            |
-| `DEPLOY_PATH`      | папка на сервере с `.env` (напр. `/opt/acme`)     |
+| `POSTGRES_PASSWORD`, `JWT_SECRET`, `ADMIN_PASSWORD`, `BOT_TOKEN` | секреты приложений (обязательные) |
+| `POSTGRES_USER`, `POSTGRES_DB`, `JWT_EXPIRES_IN`, `CORS_ORIGINS` | необязательные |
 
 `GITHUB_TOKEN` создаётся автоматически и используется и для публикации
 образов в GHCR, и для их скачивания на сервере — отдельно ничего не нужно.
 
-### Переменные (Variables, необязательно)
+### Переменные (Variables)
 
-Используются как build-args для фронтендов. Значение также читается в
-рантайме (`NUXT_PUBLIC_*` из `.env` на сервере), поэтому обычно достаточно
-задать их в `.env` и переменные можно не заполнять.
+Передаются фронтендам как build-args и записываются в `.env` на сервере
+(Nuxt читает `NUXT_PUBLIC_*` и в рантайме).
 
 | Переменная                 | Назначение                          |
 | -------------------------- | ----------------------------------- |
@@ -50,15 +53,15 @@ Settings → Environments → создать **`staging`** и **`production`**.
 ## Что нужно на сервере
 
 1. Установлены Docker и плагин Docker Compose (`docker compose version`).
-2. Папка `DEPLOY_PATH` (напр. `/opt/acme`), а в ней файл `.env`
-   со всеми переменными (см. `.env.example`). Для фронтендов важно, чтобы
-   `NUXT_PUBLIC_API_BASE_URL` указывал на **публичный** адрес API.
-3. Файл `docker-compose.deploy.yml` попадает на сервер автоматически —
-   workflow копирует его в `DEPLOY_PATH` при каждом деплое.
+2. Больше ничего: каталог деплоя (`/opt/app` или `/opt/app-staging`)
+   создаётся автоматически, а `.env` (из секретов GitHub),
+   `docker-compose.deploy.yml`, `deploy.sh` и `deploy/postgres/init-databases.sh`
+   копируются туда при каждом деплое. Для фронтендов важно, чтобы
+   `NUXT_PUBLIC_API_BASE_URL` указывал на **публичный** адрес API (gateway).
 
-Портами наружу проброшены: API `3001`, admin `3000`, client `3002`
-(меняются через `API_PORT` / `ADMIN_PORT` / `CLIENT_PORT` в `.env`).
-Postgres наружу не публикуется.
+Портами наружу (на `127.0.0.1`, за nginx) проброшены: API/gateway `3001`,
+admin `3000`, client `3002`. Сервисы `auth`, `users`, `bot` и Postgres
+доступны только внутри docker-сети.
 
 ## Как выкатывать
 
@@ -77,17 +80,24 @@ Postgres наружу не публикуется.
 сервере укажите конкретный неизменяемый тег:
 
 ```bash
-cd $DEPLOY_PATH
-IMAGE_PREFIX=ghcr.io/your-org/acme IMAGE_TAG=0.9.0 \
-  docker compose -f docker-compose.deploy.yml up -d
+cd /opt/app
+IMAGE_PREFIX=ghcr.io/your-org/your-repo IMAGE_TAG=0.9.0 ./deploy.sh
 ```
 
 ## Миграции БД
 
-Миграции TypeORM (`pnpm migration:run`) сейчас не запускаются автоматически
-в пайплайне. Запускайте их отдельно (например, разовым контейнером или
-командой на сервере) до/после выкатки `api`, когда в релизе есть изменения
-схемы.
+Каждый сервис с базой (сейчас `users`) хранит SQL-миграции в
+`services/<name>/migrations/` (формат goose), вшивает их в бинарник и
+применяет при старте. Отдельный шаг миграций в пайплайне не нужен.
+
+База каждого сервиса создаётся скриптом `deploy/postgres/init-databases.sh`
+из списка `POSTGRES_MULTIPLE_DATABASES` — но только при **первой**
+инициализации тома Postgres. Добавив новый сервис с базой на уже работающем
+сервере, создайте базу вручную:
+
+```bash
+docker compose -p app -f docker-compose.deploy.yml exec postgres createdb -U app <name>
+```
 
 ## Локальная сборка
 
@@ -103,41 +113,23 @@ Production и staging живут на одном VPS, но полностью и
 | Параметр            | production                | staging                          |
 |---------------------|---------------------------|----------------------------------|
 | Триггер             | тег `vX.Y.Z`              | push в `main` / dispatch=staging |
-| Каталог на сервере  | `/opt/acme`          | `/opt/acme-staging`         |
-| compose-проект      | `acme`               | `acme-staging`              |
+| Каталог на сервере  | `/opt/app`                | `/opt/app-staging`               |
+| compose-проект      | `app`                     | `app-staging`                    |
 | Порты (127.0.0.1)   | api 3001, admin 3000, client 3002 | api 4001, admin 4000, client 4002 |
 | Домены              | example.com, admin., api. | test.example.com, test.admin., test.api. |
 | Образ (IMAGE_TAG)   | версия `X.Y.Z`            | `staging`                        |
 
-Разные `COMPOSE_PROJECT_NAME` дают отдельные тома (`acme_postgres_data`
-vs `acme-staging_postgres_data`), сети и контейнеры — БД не пересекаются.
+Разные `COMPOSE_PROJECT_NAME` дают отдельные тома (`app_postgres_data`
+vs `app-staging_postgres_data`), сети и контейнеры — БД не пересекаются.
 
 ### Разовая настройка сервера (для staging)
 
 1. **DNS** — A-записи на IP сервера:
    `test`, `test.admin`, `test.api` → <IP>.
 
-2. **nginx** — `/etc/nginx/conf.d/acme-staging.conf` (3 server-блока,
-   как для прода, но на staging-порты):
-
-   ```nginx
-   server {
-       listen 80; server_name test.example.com;
-       location / { proxy_pass http://127.0.0.1:4002; include /etc/nginx/proxy_params; }
-   }
-   server {
-       listen 80; server_name test.admin.example.com;
-       client_max_body_size 25m;
-       location / { proxy_pass http://127.0.0.1:4000; include /etc/nginx/proxy_params; }
-   }
-   server {
-       listen 80; server_name test.api.example.com;
-       client_max_body_size 25m;
-       location / { proxy_pass http://127.0.0.1:4001; include /etc/nginx/proxy_params; }
-   }
-   ```
-   (если `proxy_params` нет — скопируйте proxy_set_header-строки из прод-конфига).
-   Затем `nginx -t && systemctl reload nginx`.
+2. **nginx** — скопируйте `deploy/nginx/staging.example.conf` в
+   `/etc/nginx/conf.d/app-staging.conf`, замените `example.com` на свой домен,
+   затем `nginx -t && systemctl reload nginx`.
 
 3. **TLS** — Let's Encrypt для staging-доменов:
    ```bash

@@ -4,8 +4,8 @@ name: Deploy
 #   push/merge в main   -> сборка образов -> деплой на STAGING (test.*)
 #   push тега vX.Y.Z     -> сборка образов -> деплой на PRODUCTION
 # Оба окружения живут на ОДНОМ сервере, но полностью изолированы:
-#   - разные каталоги деплоя  (/opt/acme  vs  /opt/acme-staging)
-#   - разные compose-проекты  (acme       vs  acme-staging)
+#   - разные каталоги деплоя  (/opt/app  vs  /opt/app-staging)
+#   - разные compose-проекты  (app       vs  app-staging)
 #     => отдельные тома БД, сети и контейнеры
 #   - разные порты на 127.0.0.1 (nginx на хосте проксирует нужные домены)
 # Секреты и переменные задаются через GitHub Environments (staging, production).
@@ -59,10 +59,10 @@ jobs:
 
           # Каталог деплоя, имя compose-проекта и порты зависят от окружения.
           if [[ "$CH" == "production" ]]; then
-            DDIR="/opt/acme";         PROJ="acme"
+            DDIR="/opt/app";         PROJ="app"
             AP=3001; ADP=3000; CP=3002
           else
-            DDIR="/opt/acme-staging"; PROJ="acme-staging"
+            DDIR="/opt/app-staging"; PROJ="app-staging"
             AP=4001; ADP=4000; CP=4002
           fi
 
@@ -80,6 +80,8 @@ jobs:
 
   # --------------------------------------------------------------------------
   # 2. Сборка и публикация образов всех приложений в GHCR
+  #    Go-микросервисы собираются общим services/Dockerfile (build-arg SERVICE),
+  #    фронтенды — своими Dockerfile из apps/*.
   #    environment: подтягивает переменные нужного окружения, чтобы
   #    NUXT_PUBLIC_API_BASE_URL (вшивается в client/admin на этапе сборки)
   #    указывал на правильный домен API для staging/production.
@@ -94,7 +96,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [api, bot, admin, client]
+        include:
+          - { app: gateway, context: services, file: services/Dockerfile }
+          - { app: auth, context: services, file: services/Dockerfile }
+          - { app: users, context: services, file: services/Dockerfile }
+          - { app: bot, context: services, file: services/Dockerfile }
+          - { app: admin, context: ., file: apps/admin/Dockerfile }
+          - { app: client, context: ., file: apps/client/Dockerfile }
     steps:
       - uses: actions/checkout@v4
 
@@ -110,13 +118,14 @@ jobs:
       - name: Build & push ${{ matrix.app }}
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: apps/${{ matrix.app }}/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/${{ matrix.app }}:${{ needs.prepare.outputs.channel }}
             ghcr.io/${{ github.repository }}/${{ matrix.app }}:${{ needs.prepare.outputs.version }}
           build-args: |
+            SERVICE=${{ matrix.app }}
             NUXT_PUBLIC_API_BASE_URL=${{ vars.NUXT_PUBLIC_API_BASE_URL }}
             NUXT_PUBLIC_BOT_URL=${{ vars.NUXT_PUBLIC_BOT_URL }}
           cache-from: type=gha,scope=${{ matrix.app }}
@@ -156,9 +165,9 @@ jobs:
           : "${BOT_TOKEN:?BOT_TOKEN secret is missing}"
           : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD secret is missing}"
           {
-            printf 'POSTGRES_USER=%s\n'            "${POSTGRES_USER:-parcel_bot}"
+            printf 'POSTGRES_USER=%s\n'            "${POSTGRES_USER:-app}"
             printf 'POSTGRES_PASSWORD=%s\n'        "$POSTGRES_PASSWORD"
-            printf 'POSTGRES_DB=%s\n'              "${POSTGRES_DB:-parcel_bot}"
+            printf 'POSTGRES_DB=%s\n'              "${POSTGRES_DB:-app}"
             printf 'JWT_SECRET=%s\n'               "$JWT_SECRET"
             [ -n "$JWT_EXPIRES_IN" ] && printf 'JWT_EXPIRES_IN=%s\n' "$JWT_EXPIRES_IN"
             printf 'ADMIN_PASSWORD=%s\n'           "$ADMIN_PASSWORD"
@@ -192,12 +201,13 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          source: "docker-compose.deploy.yml,deploy.sh,.env"
+          source: "docker-compose.deploy.yml,deploy.sh,deploy/postgres/init-databases.sh,.env"
           target: ${{ needs.prepare.outputs.deploy_dir }}
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
+          IMAGE_PREFIX: ghcr.io/${{ github.repository }}
           IMAGE_TAG: ${{ needs.prepare.outputs.deploy_tag }}
           COMPOSE_PROJECT_NAME: ${{ needs.prepare.outputs.project }}
           DEPLOY_DIR: ${{ needs.prepare.outputs.deploy_dir }}
@@ -212,7 +222,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: IMAGE_TAG,COMPOSE_PROJECT_NAME,DEPLOY_DIR,API_PORT,ADMIN_PORT,CLIENT_PORT,GHCR_USER,GHCR_TOKEN
+          envs: IMAGE_PREFIX,IMAGE_TAG,COMPOSE_PROJECT_NAME,DEPLOY_DIR,API_PORT,ADMIN_PORT,CLIENT_PORT,GHCR_USER,GHCR_TOKEN
           script: |
             set -e
             cd "$DEPLOY_DIR"

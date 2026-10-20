@@ -1,5 +1,5 @@
 {
-  "name": "parcel-bot-monorepo",
+  "name": "fullstack-app-template",
   "private": true,
   "version": "1.0.0",
   "packageManager": "pnpm@9.15.9",
@@ -7,15 +7,12 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev:api": "pnpm --filter @app/database build && pnpm --filter @app/api dev",
-    "dev:bot": "pnpm --filter @app/database build && pnpm --filter @app/bot dev",
     "dev:admin": "pnpm --filter @app/admin dev",
+    "dev:client": "pnpm --filter @app/client dev",
     "build": "pnpm -r build",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "pnpm --filter @app/database build && pnpm -r typecheck",
-    "migration:generate": "pnpm --filter @app/database migration:generate",
-    "migration:run": "pnpm --filter @app/database migration:run"
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
